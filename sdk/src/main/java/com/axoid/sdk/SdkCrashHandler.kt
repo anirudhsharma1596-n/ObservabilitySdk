@@ -12,7 +12,8 @@ import java.io.StringWriter
  */
 class SdkCrashHandler(
     private val defaultHandler: Thread.UncaughtExceptionHandler?,
-    private val breadcrumbRingBuffer: BreadcrumbRingBuffer
+    private val breadcrumbRingBuffer: BreadcrumbRingBuffer,
+    private val stackTraceTrie: StackTraceTrie
 ) : Thread.UncaughtExceptionHandler {
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
@@ -22,23 +23,25 @@ class SdkCrashHandler(
         val breadcrumbs = breadcrumbRingBuffer.getSnapshot()
 
         // 2. Serialize the stack trace into a string.
-        val stackTrace = getStackTraceAsString(throwable)
+        val stackTraceString = getStackTraceAsString(throwable)
+        val stackTraceLines = stackTraceString.lines().filter { it.isNotBlank() }
 
-        // 3. Log everything for now. This is where we will later implement
-        //    the Trie aggregation and the Batching & Priority logic.
+        // 3. ADD THE STACK TRACE TO THE TRIE for aggregation.
+        // We will also keep the first set of breadcrumbs associated with this crash.
+        // A real SDK might have logic to store breadcrumbs for each occurrence.
+        val crashCount = stackTraceTrie.add(stackTraceLines)
+
+
+        // 4. Log the report. In a real scenario, this would be saved to a file.
         Log.e(
-            "ObservabilitySdk",
-            """
-            |--- CRASH DETECTED ---
-            |THREAD: ${thread.name}
-            |
-            |STACK TRACE:
-            |$stackTrace
-            |
-            |BREADCRUMBS (${breadcrumbs.size} items):
-            |${breadcrumbs.joinToString("\n") { "  - ${it.timestamp}: [${it.type}] ${it.message}" }}
-            |--- END OF REPORT ---
-            """.trimMargin()
+            "ObservabilitySdk", """
+--- CRASH DETECTED & AGGREGATED ---
+This specific crash has now occurred $crashCount times (check the Trie).
+The full report would be batched and sent later. For now, we log it.
+
+BREADCRUMBS (from first occurrence):
+${breadcrumbs.joinToString("\n") { "  - ${it.timestamp}: [${it.type}] ${it.message}" }}
+            """.trimIndent()
         )
 
         // 4. IMPORTANT: Chain to the original handler.

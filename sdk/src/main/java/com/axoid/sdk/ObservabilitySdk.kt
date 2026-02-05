@@ -11,6 +11,7 @@ import java.util.Date
 object ObservabilitySdk {
 
     private lateinit var ringBuffer: BreadcrumbRingBuffer
+    private lateinit var stackTraceTrie: StackTraceTrie // <-- ADD THIS
     private var isInitialized = false
     private val lock = Any()
 
@@ -26,14 +27,21 @@ object ObservabilitySdk {
                 // You could log a warning here
                 return
             }
+
+            // 1. Create the persistence layer
+            val triePersistence = TriePersistence(context)
             ringBuffer = BreadcrumbRingBuffer(breadcrumbCapacity)
+            stackTraceTrie = StackTraceTrie(triePersistence)
 
             // --- SET UP THE CRASH HANDLER ---
             // 1. Get the current default handler. We need to call it later.
             val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
 
             // 2. Create an instance of our custom handler.
-            val sdkCrashHandler = SdkCrashHandler(defaultHandler, ringBuffer)
+            val sdkCrashHandler = SdkCrashHandler(
+                defaultHandler=defaultHandler,
+                breadcrumbRingBuffer =ringBuffer,
+                stackTraceTrie=stackTraceTrie)
 
             // 3. Set our custom handler as the new default.
             Thread.setDefaultUncaughtExceptionHandler(sdkCrashHandler)
