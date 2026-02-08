@@ -12,6 +12,7 @@ import java.io.File
 class ReportManager(context: Context) {
 
     private val reportsDir = File(context.filesDir, "axoid_reports")
+    private val storageQuotaBytes = 10 * 1024 * 1024 // 10 MB
 
     init {
         if (!reportsDir.exists()) {
@@ -24,6 +25,7 @@ class ReportManager(context: Context) {
      * This is designed to be called from the crash handler and must be fast.
      */
     fun saveReport(report: Report) {
+        enforceStorageQuota()
         try {
             val jsonString = Json.encodeToString(report)
             // Use the report's unique ID as the filename.
@@ -51,5 +53,20 @@ class ReportManager(context: Context) {
      */
     fun loadPendingReports(): List<File> {
         return reportsDir.listFiles { _, name -> name.endsWith(".json") }?.toList() ?: emptyList()
+    }
+
+    private fun enforceStorageQuota() {
+        val files = loadPendingReports().sortedBy { it.lastModified() } // Sort oldest to newest
+        var currentSize = files.sumOf { it.length() }
+
+        for (file in files) {
+            if (currentSize < storageQuotaBytes) break
+            // Delete the oldest files until we are under the quota.
+            // A more advanced version would delete low-priority files first.
+            val fileSize = file.length()
+            if (file.delete()) {
+                currentSize -= fileSize
+            }
+        }
     }
 }

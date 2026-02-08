@@ -23,6 +23,7 @@ class UploadWorker(
 
     private val reportManager = ReportManager(appContext)
 
+    @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     override suspend fun doWork(): Result {
         Log.d("ObservabilitySdk", "UploadWorker starting...")
 
@@ -72,26 +73,24 @@ class UploadWorker(
         val isUnmetered =
             capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true
 
-        return if (isUnmetered) {
-            // On Wi-Fi, send everything
-            Log.d(
-                "ObservabilitySdk",
-                "Network is unmetered (Wi-Fi). Sending all ${files.size} reports."
-            )
-            files
-        } else {
-            // On metered network (Cellular), only send HIGH priority reports
-            Log.d(
-                "ObservabilitySdk",
-                "Network is metered (Cellular). Filtering for HIGH priority reports."
-            )
-            files.filter { file ->
-                try {
-                    val report: Report = Json.decodeFromString(file.readText())
-                    report.priority == ReportPriority.HIGH
-                } catch (e: Exception) {
-                    false // If a report is malformed, don't send it.
-                }
+        val maxAgeMillis = java.util.concurrent.TimeUnit.DAYS.toMillis(2) // 2-day expiry
+        val now = System.currentTimeMillis()
+
+        return files.filter { file ->
+            try {
+                // On Wi-Fi, always send.
+                if (isUnmetered) return@filter true
+
+                val report: Report = Json.decodeFromString(file.readText())
+
+                // Check if the report is too old. If so, send it anyway.
+                val isExpired = (now - report.timestamp) > maxAgeMillis
+                if (isExpired) return@filter true
+
+                // Otherwise, on a metered network, only send high priority.
+                report.priority == ReportPriority.HIGH
+            } catch (e: Exception) {
+                false
             }
         }
     }
