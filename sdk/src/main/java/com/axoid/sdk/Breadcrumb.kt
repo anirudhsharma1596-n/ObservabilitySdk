@@ -2,7 +2,7 @@
 
 package com.axoid.sdk
 
-import java.util.Date
+import kotlinx.serialization.Serializable
 
 /**
  * Represents a single user action or event.
@@ -12,8 +12,10 @@ import java.util.Date
  * @param message A descriptive message about the event.
  * @param metadata Additional structured data about the event.
  */
+
+@Serializable
 data class Breadcrumb(
-    val timestamp: Date,
+    val timestamp: Long,
     val type: String,
     val message: String,
     val metadata: Map<String, String> = emptyMap()

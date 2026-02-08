@@ -3,7 +3,6 @@
 package com.axoid.sdk
 
 import android.content.Context
-import java.util.Date
 
 /**
  * The main public entry point for the Axoid Observability SDK.
@@ -14,6 +13,8 @@ object ObservabilitySdk {
     private lateinit var stackTraceTrie: StackTraceTrie // <-- ADD THIS
     private var isInitialized = false
     private val lock = Any()
+
+    private lateinit var reportManager: ReportManager // <-- ADD THIS
 
     /**
      * Initializes the SDK. This must be called once, typically in the Application's onCreate().
@@ -30,6 +31,7 @@ object ObservabilitySdk {
 
             // 1. Create the persistence layer
             val triePersistence = TriePersistence(context)
+            reportManager = ReportManager(context)
             ringBuffer = BreadcrumbRingBuffer(breadcrumbCapacity)
             stackTraceTrie = StackTraceTrie(triePersistence)
 
@@ -41,7 +43,9 @@ object ObservabilitySdk {
             val sdkCrashHandler = SdkCrashHandler(
                 defaultHandler=defaultHandler,
                 breadcrumbRingBuffer =ringBuffer,
-                stackTraceTrie=stackTraceTrie)
+                stackTraceTrie = stackTraceTrie,
+                reportManager
+            )
 
             // 3. Set our custom handler as the new default.
             Thread.setDefaultUncaughtExceptionHandler(sdkCrashHandler)
@@ -59,7 +63,7 @@ object ObservabilitySdk {
      */
     fun leaveBreadcrumb(type: String, message: String, metadata: Map<String, String> = emptyMap()) {
         if (!isInitialized) return
-        val breadcrumb = Breadcrumb(Date(), type, message, metadata)
+        val breadcrumb = Breadcrumb(System.currentTimeMillis(), type, message, metadata)
         ringBuffer.add(breadcrumb)
     }
 
