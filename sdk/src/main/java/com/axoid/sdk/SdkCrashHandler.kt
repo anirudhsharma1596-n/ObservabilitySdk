@@ -55,7 +55,7 @@ class SdkCrashHandler(
             count = crashCount
         )
 
-        // 4. Create the final Report object with HIGH priority
+        // 5. Create the final Report object with HIGH priority
         val report = Report(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
@@ -63,22 +63,23 @@ class SdkCrashHandler(
             payload = payload
         )
 
-        // 5. SAVE THE REPORT TO DISK instead of logging
+        // 6. SAVE THE REPORT TO DISK instead of logging
         reportManager.saveReport(report)
 
 
-        // 4. Log the report. In a real scenario, this would be saved to a file.
-        Log.e("ObservabilitySdk", "--- CRASH DETECTED. Report saved to disk. ---")
-//        Log.e(
-//            "ObservabilitySdk", """
-//--- CRASH DETECTED & AGGREGATED ---
-//This specific crash has now occurred $crashCount times (check the Trie).
-//The full report would be batched and sent later. For now, we log it.
-//
-//BREADCRUMBS (from first occurrence):
-//${breadcrumbs.joinToString("\n") { "  - ${logDateFormatter.format(it.timestamp)}: [${it.type}] ${it.message}" }}
-//            """.trimIndent()
-//        )
+        // 7. Log the report. In a real scenario, this would be saved to a file.
+        Log.e(
+            "ObservabilitySdk",
+            """
+--- CRASH DETECTED. Report saved to disk. ---
+BREADCRUMBS (${payload.breadcrumbs.size} items):
+${
+                payload.breadcrumbs.joinToString("\n") {
+                    "  - ${logDateFormatter.format(it.timestamp)}: [${it.type}] ${it.message}"
+                }
+            }
+            """.trimIndent()
+        )
 
         // 4. IMPORTANT: Chain to the original handler.
         // This ensures that the app still behaves as expected (e.g., shows the
