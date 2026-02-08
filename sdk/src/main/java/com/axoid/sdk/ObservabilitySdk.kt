@@ -3,11 +3,21 @@
 package com.axoid.sdk
 
 import android.content.Context
+import android.util.Log
+
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 /**
  * The main public entry point for the Axoid Observability SDK.
  */
 object ObservabilitySdk {
+
+    private const val UPLOAD_WORK_TAG = "axoid_sdk_upload_work" // A unique tag for our work
 
     private lateinit var ringBuffer: BreadcrumbRingBuffer
     private lateinit var stackTraceTrie: StackTraceTrie // <-- ADD THIS
@@ -53,6 +63,10 @@ object ObservabilitySdk {
 
             isInitialized = true
 
+
+            // --- SCHEDULE THE UPLOAD WORKER ---
+            scheduleBackgroundUploader(context)
+
             // TODO: Set up ANR detection.
             // TODO: Set up network monitoring.
         }
@@ -73,5 +87,28 @@ object ObservabilitySdk {
     internal fun getBreadcrumbsSnapshot(): List<Breadcrumb> {
         if (!isInitialized) return emptyList()
         return ringBuffer.getSnapshot()
+    }
+
+
+    private fun scheduleBackgroundUploader(context: Context) {
+        // Define constraints for the worker: it needs a network connection.
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        // Create a periodic work request to run approximately every hour.
+        // WorkManager may adjust the timing to optimize for battery.
+        val uploadWorkRequest = PeriodicWorkRequestBuilder<UploadWorker>(1, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .addTag(UPLOAD_WORK_TAG)
+            .build()
+
+        // Enqueue the work, keeping any existing work scheduled with the same tag.
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            UPLOAD_WORK_TAG,
+            ExistingPeriodicWorkPolicy.KEEP, // Don't re-schedule if it's already running
+            uploadWorkRequest
+        )
+        Log.d("ObservabilitySdk", "Background upload worker scheduled.")
     }
 }
